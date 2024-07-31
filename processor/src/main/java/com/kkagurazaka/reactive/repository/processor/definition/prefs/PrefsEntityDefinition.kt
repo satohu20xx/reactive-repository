@@ -4,8 +4,15 @@ import com.kkagurazaka.reactive.repository.annotation.PrefsEntity
 import com.kkagurazaka.reactive.repository.processor.ProcessingContext
 import com.kkagurazaka.reactive.repository.processor.definition.EntityDefinition
 import com.kkagurazaka.reactive.repository.processor.exception.ProcessingException
-import com.kkagurazaka.reactive.repository.processor.tools.*
-import com.squareup.javapoet.TypeName
+import com.kkagurazaka.reactive.repository.processor.tools.AnnotationHandle
+import com.kkagurazaka.reactive.repository.processor.tools.Types
+import com.kkagurazaka.reactive.repository.processor.tools.getSetterConstructor
+import com.kkagurazaka.reactive.repository.processor.tools.isGetter
+import com.kkagurazaka.reactive.repository.processor.tools.isPrefsKeyAnnotated
+import com.kkagurazaka.reactive.repository.processor.tools.isPublicNonFinalField
+import com.kkagurazaka.reactive.repository.processor.tools.isSetter
+import com.kkagurazaka.reactive.repository.processor.tools.toLowerSnake
+import com.squareup.kotlinpoet.asTypeName
 import javax.lang.model.element.ExecutableElement
 import javax.lang.model.element.TypeElement
 import javax.lang.model.type.TypeMirror
@@ -29,10 +36,16 @@ class PrefsEntityDefinition(
         init()
 
         annotationHandle = AnnotationHandle.from(element)
-            ?: throw ProcessingException("${element.qualifiedName} is not annotated with @PrefsEntity", element)
+            ?: throw ProcessingException(
+                "${element.qualifiedName} is not annotated with @PrefsEntity",
+                element
+            )
 
         if (!hasEmptyConstructor) {
-            throw ProcessingException("@PrefsEntity requires a constructor with no parameters", element)
+            throw ProcessingException(
+                "@PrefsEntity requires a constructor with no parameters",
+                element
+            )
         }
 
         val useDefaultPreferences = annotationHandle.getOrDefault<Boolean>("useDefaultPreferences")
@@ -56,7 +69,7 @@ class PrefsEntityDefinition(
         commitOnSave = annotationHandle.getOrDefault("commitOnSave")
 
         typeAdapter = annotationHandle.get<TypeMirror>("typeAdapter")
-            ?.let { TypeName.get(it) }
+            ?.asTypeName()
             ?.takeUnless { it == Types.defaultTypeAdapter }
             ?.let { context.typeAdapterDefinitions[it] }
 
@@ -69,13 +82,19 @@ class PrefsEntityDefinition(
             .asSequence()
             .filter { it.isPrefsKeyAnnotated }
             .forEach {
+                println("simpleName: ${it.simpleName}")
+                it.modifiers.forEach {
+                    println("modifier: $it")
+                }
                 when {
                     it.isPublicNonFinalField -> {
                         fields.add(FieldDefinition(context, it, typeAdapter))
                     }
+
                     it.isGetter -> {
                         getters.add(GetterDefinition(context, it, typeAdapter))
                     }
+
                     it.isSetter -> {
                         setters.add(SetterDefinition(context, it, typeAdapter))
                     }
@@ -83,20 +102,28 @@ class PrefsEntityDefinition(
             }
 
         if (fields.isNotEmpty() && (getters.isNotEmpty() || setters.isNotEmpty())) {
-            throw ProcessingException("Cannot annotate field and getter / setter with @PrefsKey together", element)
+            throw ProcessingException(
+                "Cannot annotate field and getter / setter with @PrefsKey together",
+                element
+            )
         }
 
         accessorType = when {
             fields.isNotEmpty() -> {
                 AccessorType.Fields(fields)
             }
+
             getters.isNotEmpty() && setters.isEmpty() -> {
                 element.getSetterConstructor(getters)?.let {
                     AccessorType.GettersAndSetterConstructor(getters, it)
                 } ?: run {
-                    throw ProcessingException("No setters annotated with @PrefsKey found in @PrefsEntity", element)
+                    throw ProcessingException(
+                        "No setters annotated with @PrefsKey found in @PrefsEntity",
+                        element
+                    )
                 }
             }
+
             getters.isNotEmpty() && setters.isNotEmpty() -> {
                 val sortedSetters = mutableListOf<SetterDefinition>()
                 getters.forEach { getterDef ->
@@ -112,6 +139,7 @@ class PrefsEntityDefinition(
                     throw ProcessingException("Getters and setters do not match", element)
                 }
             }
+
             else -> throw ProcessingException(
                 "Public non-final field or getter / setter annotated with @PrefsKey is not found",
                 element
@@ -121,7 +149,7 @@ class PrefsEntityDefinition(
 
     sealed class PreferencesType {
 
-        object Default : PreferencesType()
+        data object Default : PreferencesType()
 
         data class Named(val name: String) : PreferencesType()
     }

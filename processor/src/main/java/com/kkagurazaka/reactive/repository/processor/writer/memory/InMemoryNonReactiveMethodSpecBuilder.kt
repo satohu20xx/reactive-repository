@@ -2,93 +2,59 @@ package com.kkagurazaka.reactive.repository.processor.writer.memory
 
 import com.kkagurazaka.reactive.repository.processor.definition.MethodDefinition
 import com.kkagurazaka.reactive.repository.processor.definition.memory.InMemoryEntityDefinition
-import com.squareup.javapoet.CodeBlock
-import com.squareup.javapoet.MethodSpec
-import javax.lang.model.element.Modifier
+import com.squareup.kotlinpoet.CodeBlock
+import com.squareup.kotlinpoet.FunSpec
+import com.squareup.kotlinpoet.KModifier
 
 object InMemoryNonReactiveMethodSpecBuilder {
 
-    fun build(definition: MethodDefinition<InMemoryEntityDefinition>, hasRx2Processor: Boolean): MethodSpec? {
+    fun build(
+        definition: MethodDefinition<InMemoryEntityDefinition>,
+        nullable: Boolean,
+    ): FunSpec? {
         val entityDefinition = definition.entityDefinition
+        val className = entityDefinition.className.copy(nullable = nullable)
 
-        val builder = MethodSpec.methodBuilder(definition.methodName)
-            .addModifiers(Modifier.PUBLIC)
-            .addAnnotation(Override::class.java)
+        val builder = FunSpec.builder(definition.methodName)
+            .addModifiers(KModifier.PUBLIC)
+            .addModifiers(KModifier.OVERRIDE)
 
         return when (val type = definition.type) {
-            is MethodDefinition.Type.Rx2Observable, is MethodDefinition.Type.Rx2Flowable -> {
+            is MethodDefinition.Type.CoroutineFlow -> {
                 return null
             }
-            is MethodDefinition.Type.NullableGetter, MethodDefinition.Type.PlatFormTypeGetter -> {
-                builder.returns(entityDefinition.className)
-                    .apply {
-                        if (hasRx2Processor) {
-                            addCode(buildProcessorNullableGetterCode())
-                        } else {
-                            addCode(buildValueGetterCode())
-                        }
-                    }
+
+            is MethodDefinition.Type.NullableGetter,
+            is MethodDefinition.Type.NonNullGetter,
+            is MethodDefinition.Type.PlatFormTypeGetter -> {
+                builder.returns(className)
+                    .addCode(buildValueGetterCode())
             }
-            is MethodDefinition.Type.NonNullGetter -> {
-                builder.returns(entityDefinition.className)
-                    .apply {
-                        if (hasRx2Processor) {
-                            addCode(buildProcessorNonNullGetterCode(entityDefinition))
-                        } else {
-                            addCode(buildValueGetterCode())
-                        }
-                    }
-            }
+
             is MethodDefinition.Type.NullableSetter -> {
-                builder.setupAsSetter(entityDefinition, type.parameterName, hasRx2Processor)
+                builder.addParameter(type.parameterName, className)
+                    .addCode(buildProcessorOnNextCode(type.parameterName))
             }
+
             is MethodDefinition.Type.NonNullSetter -> {
-                builder.setupAsSetter(entityDefinition, type.parameterName, hasRx2Processor)
+                builder.addParameter(type.parameterName, className)
+                    .addCode(buildProcessorOnNextCode(type.parameterName))
             }
+
             is MethodDefinition.Type.PlatFormTypeSetter -> {
-                builder.setupAsSetter(entityDefinition, type.parameterName, hasRx2Processor)
+                builder.addParameter(type.parameterName, className)
+                    .addCode(buildProcessorOnNextCode(type.parameterName))
             }
         }.build()
     }
 
-    private fun MethodSpec.Builder.setupAsSetter(
-        entityDefinition: InMemoryEntityDefinition,
-        parameterName: String,
-        hasRx2Processor: Boolean
-    ): MethodSpec.Builder =
-        addParameter(entityDefinition.className, parameterName)
-            .apply {
-                if (hasRx2Processor) {
-                    addCode(buildProcessorOnNextCode(parameterName))
-                } else {
-                    addModifiers(Modifier.SYNCHRONIZED)
-                        .addCode(buildValueSetterCode(parameterName))
-                }
-            }
-
     private fun buildValueGetterCode(): CodeBlock =
         CodeBlock.builder()
-            .addStatement("return value")
-            .build()
-
-    private fun buildValueSetterCode(parameterName: String): CodeBlock =
-        CodeBlock.builder()
-            .addStatement("value = \$L", parameterName)
-            .build()
-
-    private fun buildProcessorNullableGetterCode(): CodeBlock =
-        CodeBlock.builder()
-            .addStatement("return processor.getValue()")
-            .build()
-
-    private fun buildProcessorNonNullGetterCode(definition: InMemoryEntityDefinition): CodeBlock =
-        CodeBlock.builder()
-            .addStatement("\$T value = processor.getValue()", definition.className)
-            .addStatement("return value != null ? value : new \$T()", definition.className)
+            .addStatement("return stateFlow.value")
             .build()
 
     private fun buildProcessorOnNextCode(parameterName: String): CodeBlock =
         CodeBlock.builder()
-            .addStatement("serialized.onNext(\$L)", parameterName)
+            .addStatement("stateFlow.value = %L", parameterName)
             .build()
 }

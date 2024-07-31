@@ -3,8 +3,7 @@ package com.kkagurazaka.reactive.repository.sample
 import com.kkagurazaka.reactive.repository.annotation.PrefsEntity
 import com.kkagurazaka.reactive.repository.annotation.PrefsKey
 import com.kkagurazaka.reactive.repository.annotation.PrefsRepository
-import io.reactivex.Flowable
-import io.reactivex.Observable
+import kotlinx.coroutines.flow.Flow
 
 @PrefsEntity(typeAdapter = SomeClassListInstanceRequiredTypeAdapter::class)
 data class TypeAdapterInstanceRequiredEntity(
@@ -22,9 +21,7 @@ interface TypeAdapterInstanceRequiredRepository {
 
     fun get(): TypeAdapterInstanceRequiredEntity
 
-    fun observe(): Observable<TypeAdapterInstanceRequiredEntity>
-
-    fun observeWithBackpressure(): Flowable<TypeAdapterInstanceRequiredEntity>
+    fun observe(): Flow<TypeAdapterInstanceRequiredEntity>
 
     fun store(entity: TypeAdapterInstanceRequiredEntity?)
 }

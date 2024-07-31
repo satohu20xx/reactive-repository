@@ -1,8 +1,8 @@
 package com.kkagurazaka.reactive.repository.processor.writer
 
 import com.kkagurazaka.reactive.repository.processor.ProcessingContext
-import com.squareup.javapoet.JavaFile
-import com.squareup.javapoet.TypeSpec
+import com.squareup.kotlinpoet.FileSpec
+import com.squareup.kotlinpoet.TypeSpec
 
 abstract class Writer(protected val context: ProcessingContext) {
 
@@ -10,8 +10,6 @@ abstract class Writer(protected val context: ProcessingContext) {
 
     abstract fun buildTypeSpec(): TypeSpec
 
-    fun buildJavaFile(): JavaFile =
-        JavaFile.builder(packageName, buildTypeSpec())
-            .skipJavaLangImports(true)
-            .build()
+    fun buildJavaFile(): FileSpec =
+        FileSpec.get(packageName, buildTypeSpec())
 }

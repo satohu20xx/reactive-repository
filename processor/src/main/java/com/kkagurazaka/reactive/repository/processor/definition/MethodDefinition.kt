@@ -5,9 +5,9 @@ import com.kkagurazaka.reactive.repository.processor.exception.ProcessingExcepti
 import com.kkagurazaka.reactive.repository.processor.tools.Types
 import com.kkagurazaka.reactive.repository.processor.tools.isNonNullAnnotated
 import com.kkagurazaka.reactive.repository.processor.tools.isNullableAnnotated
-import com.squareup.javapoet.ClassName
-import com.squareup.javapoet.ParameterizedTypeName
-import com.squareup.javapoet.TypeName
+import com.squareup.kotlinpoet.ParameterizedTypeName
+import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
+import com.squareup.kotlinpoet.asTypeName
 import javax.lang.model.element.ExecutableElement
 
 class MethodDefinition<ED : EntityDefinition<out Annotation>>(
@@ -24,7 +24,7 @@ class MethodDefinition<ED : EntityDefinition<out Annotation>>(
 
         val entityClassName = entityDefinition.className
         val isEmptyParameter = element.parameters.isEmpty()
-        val returnTypeName = TypeName.get(element.returnType)
+        val returnTypeName = element.returnType.asTypeName()
 
         type = when {
             isEmptyParameter -> when {
@@ -37,7 +37,7 @@ class MethodDefinition<ED : EntityDefinition<out Annotation>>(
                     }
                 }
                 // method returning Rx Observable has no parameters and return Observable<Entity>
-                returnTypeName is ParameterizedTypeName && returnTypeName.rawType == Types.rx2Observable -> {
+                returnTypeName is ParameterizedTypeName && returnTypeName.rawType == Types.coroutineFlow -> {
                     when {
                         element.isNullableAnnotated -> {
                             throw ProcessingException(
@@ -45,9 +45,11 @@ class MethodDefinition<ED : EntityDefinition<out Annotation>>(
                                 element
                             )
                         }
-                        returnTypeName == ParameterizedTypeName.get(Types.rx2Observable, entityClassName) -> {
-                            Type.Rx2Observable
+
+                        returnTypeName == Types.coroutineFlow.parameterizedBy(entityClassName) -> {
+                            Type.CoroutineFlow
                         }
+
                         else -> {
                             val typeParameter = returnTypeName.typeArguments.single()
                             throw ProcessingException(
@@ -57,36 +59,17 @@ class MethodDefinition<ED : EntityDefinition<out Annotation>>(
                         }
                     }
                 }
-                // method returning Rx Flowable has no parameters and return Flowable<Entity>
-                returnTypeName is ParameterizedTypeName && returnTypeName.rawType == Types.rx2Flowable -> {
-                    when {
-                        element.isNullableAnnotated -> {
-                            throw ProcessingException(
-                                "Method returning Flowable cannot be annotated with @Nullable",
-                                element
-                            )
-                        }
-                        returnTypeName == ParameterizedTypeName.get(Types.rx2Flowable, entityClassName) -> {
-                            Type.Rx2Flowable
-                        }
-                        else -> {
-                            val typeParameter = returnTypeName.typeArguments.single()
-                            throw ProcessingException(
-                                "Expected return type is Flowable<$entityClassName> but actual is Flowable<$typeParameter> at ${element.simpleName}()",
-                                element
-                            )
-                        }
-                    }
-                }
+
                 else -> {
                     throw ProcessingException(
-                        "Expected return type is $entityClassName, Observable<$entityClassName> or Flowable<$entityClassName> but actual is $returnTypeName at ${element.simpleName}()",
+                        "Expected return type is $entityClassName, Flow<$entityClassName> but actual is $returnTypeName at ${element.simpleName}()",
                         element
                     )
                 }
             }
             // setter take entity class as parameter and returns void
-            element.parameters.size == 1 && ClassName.get(element.parameters.single().asType()) == entityClassName -> {
+            element.parameters.size == 1 &&
+                    element.parameters.single().asType().asTypeName() == entityClassName -> {
                 val parameter = element.parameters.single()
                 val name = parameter.simpleName.toString()
                 when {
@@ -95,20 +78,23 @@ class MethodDefinition<ED : EntityDefinition<out Annotation>>(
                     else -> Type.PlatFormTypeSetter(name)
                 }
             }
+
             else -> {
-                throw ProcessingException("Signature of ${element.simpleName} is not supported", element)
+                throw ProcessingException(
+                    "Signature of ${element.simpleName} is not supported",
+                    element
+                )
             }
         }
     }
 
-    sealed class Type {
-        object NullableGetter : Type()
-        object NonNullGetter : Type()
-        object PlatFormTypeGetter : Type()
-        object Rx2Observable : Type()
-        object Rx2Flowable : Type()
-        data class NullableSetter(val parameterName: String) : Type()
-        data class NonNullSetter(val parameterName: String) : Type()
-        data class PlatFormTypeSetter(val parameterName: String) : Type()
+    sealed interface Type {
+        data object NullableGetter : Type
+        data object NonNullGetter : Type
+        data object PlatFormTypeGetter : Type
+        data object CoroutineFlow : Type
+        data class NullableSetter(val parameterName: String) : Type
+        data class NonNullSetter(val parameterName: String) : Type
+        data class PlatFormTypeSetter(val parameterName: String) : Type
     }
 }

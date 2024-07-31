@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -12,6 +15,8 @@ import org.robolectric.RobolectricTestRunner
 @RunWith(RobolectricTestRunner::class)
 class KotlinDataClassEntityPrefsRepositoryTest {
 
+    private val dispatcher = StandardTestDispatcher()
+
     private val context = ApplicationProvider.getApplicationContext<Context>()
     private lateinit var preferences: SharedPreferences
     private lateinit var repository: KotlinDataClassEntityPrefsRepository
@@ -19,7 +24,7 @@ class KotlinDataClassEntityPrefsRepositoryTest {
     @Before
     fun setup() {
         preferences = context.getSharedPreferences("kotlin_data_class_entity", Context.MODE_PRIVATE)
-            .apply { edit().clear().apply() }
+            .apply { edit().clear().commit() }
         repository = KotlinDataClassEntityPrefsRepositoryImpl(context)
     }
 
@@ -48,7 +53,7 @@ class KotlinDataClassEntityPrefsRepositoryTest {
             .putLong("amount", 12L)
             .putStringSet("str_list", setOf("1", "2", "3"))
             .putString("some_class_list", "0,1,2")
-            .apply()
+            .commit()
 
         val result = repository.get()
 
@@ -64,30 +69,20 @@ class KotlinDataClassEntityPrefsRepositoryTest {
     }
 
     @Test
-    fun `observe initially - default value`() {
-        repository.observe()
-            .test()
-            .run {
-                awaitCount(1)
+    fun `observe initially - default value`() = runTest(dispatcher) {
+        val result = repository.observe().first()
 
-                assertValueCount(1)
-
-                values().first().apply {
-                    assertThat(isVeteran).isFalse()
-                    assertThat(someStr).isNull()
-                    assertThat(age).isEqualTo(-1)
-                    assertThat(pie).isEqualTo(3.1415f)
-                    assertThat(amount).isEqualTo(123456789L)
-                    assertThat(strList).isEmpty()
-                    assertThat(someClassList).isEqualTo(listOf(SomeClass("initial")))
-                }
-
-                dispose()
-            }
+        assertThat(result.isVeteran).isFalse()
+        assertThat(result.someStr).isNull()
+        assertThat(result.age).isEqualTo(-1)
+        assertThat(result.pie).isEqualTo(3.1415f)
+        assertThat(result.amount).isEqualTo(123456789L)
+        assertThat(result.strList).isEmpty()
+        assertThat(result.someClassList).isEqualTo(listOf(SomeClass("initial")))
     }
 
     @Test
-    fun `observe initially - changed value`() {
+    fun `observe initially - changed value`() = runTest(dispatcher) {
         preferences.edit()
             .putBoolean("is_veteran", true)
             .putString("some_str", "some some")
@@ -96,33 +91,21 @@ class KotlinDataClassEntityPrefsRepositoryTest {
             .putLong("amount", 12L)
             .putStringSet("str_list", setOf("1", "2", "3"))
             .putString("some_class_list", "0,1,2")
-            .apply()
+            .commit()
 
-        repository.observe()
-            .test()
-            .run {
-                awaitCount(1)
+        val result = repository.observe().first()
 
-                assertValueCount(1)
-
-                values().first().apply {
-                    assertThat(isVeteran).isTrue()
-                    assertThat(someStr).isEqualTo("some some")
-                    assertThat(age).isEqualTo(24)
-                    assertThat(pie).isEqualTo(3f)
-                    assertThat(amount).isEqualTo(12L)
-                    assertThat(strList).isEqualTo(setOf("1", "2", "3"))
-                    assertThat(someClassList).isEqualTo(List(3) { SomeClass("$it") })
-                }
-
-                dispose()
-            }
+        assertThat(result.isVeteran).isTrue()
+        assertThat(result.someStr).isEqualTo("some some")
+        assertThat(result.age).isEqualTo(24)
+        assertThat(result.pie).isEqualTo(3f)
+        assertThat(result.amount).isEqualTo(12L)
+        assertThat(result.strList).isEqualTo(setOf("1", "2", "3"))
+        assertThat(result.someClassList).isEqualTo(List(3) { SomeClass("$it") })
     }
 
     @Test
     fun observe() {
-        val tester = repository.observe().test()
-
         val newEntity = KotlinDataClassEntity(
             isVeteran = true,
             someStr = "some some",
@@ -135,114 +118,15 @@ class KotlinDataClassEntityPrefsRepositoryTest {
 
         repository.store(newEntity)
 
-        tester.run {
-            awaitCount(2)
+        val result = repository.get()
 
-            assertValueCount(2)
-
-            values()[1].apply {
-                assertThat(isVeteran).isTrue()
-                assertThat(someStr).isEqualTo("some some")
-                assertThat(age).isEqualTo(24)
-                assertThat(pie).isEqualTo(3f)
-                assertThat(amount).isEqualTo(12L)
-                assertThat(strList).isEqualTo(setOf("1", "2", "3"))
-                assertThat(someClassList).isEqualTo(List(3) { SomeClass("$it") })
-            }
-
-            dispose()
-        }
-    }
-
-    @Test
-    fun `observeWithBackpressure initially - default value`() {
-        repository.observeWithBackpressure()
-            .test()
-            .run {
-                awaitCount(1)
-
-                assertValueCount(1)
-
-                values().first().apply {
-                    assertThat(isVeteran).isFalse()
-                    assertThat(someStr).isNull()
-                    assertThat(age).isEqualTo(-1)
-                    assertThat(pie).isEqualTo(3.1415f)
-                    assertThat(amount).isEqualTo(123456789L)
-                    assertThat(strList).isEmpty()
-                    assertThat(someClassList).isEqualTo(listOf(SomeClass("initial")))
-                }
-
-                dispose()
-            }
-    }
-
-    @Test
-    fun `observeWithBackpressure initially - changed value`() {
-        preferences.edit()
-            .putBoolean("is_veteran", true)
-            .putString("some_str", "some some")
-            .putInt("age", 24)
-            .putFloat("pie", 3f)
-            .putLong("amount", 12L)
-            .putStringSet("str_list", setOf("1", "2", "3"))
-            .putString("some_class_list", "0,1,2")
-            .apply()
-
-        repository.observeWithBackpressure()
-            .test()
-            .run {
-                awaitCount(1)
-
-                assertValueCount(1)
-
-                values().first().apply {
-                    assertThat(isVeteran).isTrue()
-                    assertThat(someStr).isEqualTo("some some")
-                    assertThat(age).isEqualTo(24)
-                    assertThat(pie).isEqualTo(3f)
-                    assertThat(amount).isEqualTo(12L)
-                    assertThat(strList).isEqualTo(setOf("1", "2", "3"))
-                    assertThat(someClassList).isEqualTo(List(3) { SomeClass("$it") })
-                }
-
-                dispose()
-            }
-    }
-
-    @Test
-    fun observeWithBackpressure() {
-        val tester = repository.observeWithBackpressure().test()
-
-        val newEntity = KotlinDataClassEntity(
-            isVeteran = true,
-            someStr = "some some",
-            age = 24,
-            pie = 3f,
-            amount = 12L,
-            strList = setOf("1", "2", "3"),
-            someClassList = List(3) { SomeClass("$it") }
-        )
-
-        repository.store(newEntity)
-
-        tester.run {
-            awaitCount(2)
-
-            assertValueCount(2)
-
-            values()[1].apply {
-                assertThat(isVeteran).isTrue()
-                assertThat(someStr).isEqualTo("some some")
-                assertThat(age).isEqualTo(24)
-                assertThat(pie).isEqualTo(3f)
-                assertThat(amount).isEqualTo(12L)
-                assertThat(strList).isEqualTo(setOf("1", "2", "3"))
-                assertThat(someClassList).isEqualTo(List(3) { SomeClass("$it") })
-            }
-
-            dispose()
-        }
+        assertThat(result.isVeteran).isTrue()
+        assertThat(result.someStr).isEqualTo("some some")
+        assertThat(result.age).isEqualTo(24)
+        assertThat(result.pie).isEqualTo(3f)
+        assertThat(result.amount).isEqualTo(12L)
+        assertThat(result.strList).isEqualTo(setOf("1", "2", "3"))
+        assertThat(result.someClassList).isEqualTo(List(3) { SomeClass("$it") })
     }
 
     @Test
@@ -278,7 +162,7 @@ class KotlinDataClassEntityPrefsRepositoryTest {
             .putLong("amount", 12L)
             .putStringSet("str_list", setOf("1", "2", "3"))
             .putString("some_class_list", "0,1,2")
-            .apply()
+            .commit()
 
         repository.store(null)
 

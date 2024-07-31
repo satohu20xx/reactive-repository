@@ -3,8 +3,8 @@ package com.kkagurazaka.reactive.repository.processor.writer
 import com.kkagurazaka.reactive.repository.processor.ProcessingContext
 import com.kkagurazaka.reactive.repository.processor.definition.EntityDefinition
 import com.kkagurazaka.reactive.repository.processor.definition.RepositoryDefinition
-import com.squareup.javapoet.TypeSpec
-import javax.lang.model.element.Modifier
+import com.squareup.kotlinpoet.KModifier
+import com.squareup.kotlinpoet.TypeSpec
 
 abstract class RepositoryWriter<RD : RepositoryDefinition<out Annotation, out EntityDefinition<out Annotation>>>(
     context: ProcessingContext,
@@ -18,7 +18,7 @@ abstract class RepositoryWriter<RD : RepositoryDefinition<out Annotation, out En
 
         return TypeSpec.classBuilder(definition.generatedClassName)
             .addSuperinterface(definition.baseClassName)
-            .addModifiers(Modifier.PUBLIC)
+            .addModifiers(KModifier.PUBLIC)
             .setup()
             .build()
     }

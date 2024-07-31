@@ -10,7 +10,7 @@ import com.kkagurazaka.reactive.repository.processor.definition.prefs.TypeAdapte
 import com.kkagurazaka.reactive.repository.processor.exception.ProcessingException
 import com.kkagurazaka.reactive.repository.processor.writer.memory.InMemoryRepositoryWriter
 import com.kkagurazaka.reactive.repository.processor.writer.prefs.PrefsRepositoryWriter
-import com.squareup.javapoet.JavaFile
+import com.squareup.kotlinpoet.FileSpec
 import javax.annotation.processing.AbstractProcessor
 import javax.annotation.processing.Processor
 import javax.annotation.processing.RoundEnvironment
@@ -126,11 +126,11 @@ class ReactiveRepositoryProcessor : AbstractProcessor() {
         }
     }
 
-    private fun JavaFile.writeToFiler(element: Element) {
+    private fun FileSpec.writeToFiler(element: Element) {
         try {
             writeTo(processingEnv.filer)
         } catch (t: Throwable) {
-            throw ProcessingException("Failed to write " + typeSpec.name, element, t)
+            throw ProcessingException("Failed to write ", element, t)
         }
     }
 }

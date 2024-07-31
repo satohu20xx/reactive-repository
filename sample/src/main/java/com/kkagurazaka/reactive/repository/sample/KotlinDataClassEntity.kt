@@ -9,7 +9,7 @@ import com.kkagurazaka.reactive.repository.annotation.PrefsKey
 data class KotlinDataClassEntity(
     @get:PrefsKey val isVeteran: Boolean = false,
     @get:PrefsKey val someStr: String? = null,
-    @get:PrefsKey val age: Int = -1,
+    @get:PrefsKey internal val age: Int = -1,
     @get:PrefsKey val pie: Float = 3.1415f,
     @get:PrefsKey val amount: Long = 123456789L,
     @get:PrefsKey val strList: Set<String> = emptySet(),
