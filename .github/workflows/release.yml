@@ -1,0 +1,32 @@
+  name: Release
+
+  on:
+    push:
+      tags:
+        - '*'
+
+  jobs:
+    release:
+      runs-on: ubuntu-latest
+
+      steps:
+        - uses: actions/checkout@v3
+        - name: Setup Java
+          uses: actions/setup-java@v3
+          with:
+            distribution: 'adopt'
+            java-version: '17'
+        - name: Setup Android SDK
+          uses: android-actions/setup-android@v2
+        - name: Publish annotation module to Github packages
+          run: ./gradlew :annotation:publish
+          env:
+            GITHUB_TAG: ${{ github.ref_name }}
+            GITHUB_ACTOR: ${{ secrets.GITHUB_ACTOR }}
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        - name: Publish processor module to Github packages
+          run: ./gradlew :processor:publish
+          env:
+            GITHUB_TAG: ${{ github.ref_name }}
+            GITHUB_ACTOR: ${{ secrets.GITHUB_ACTOR }}
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

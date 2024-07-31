@@ -35,3 +35,24 @@ dependencies {
     testImplementation 'com.google.truth:truth:0.44'
     testImplementation 'com.google.testing.compile:compile-testing:0.18'
 }
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            groupId = "com.github.satohu20xx.reactive-repository"
+            artifactId = "processor"
+            version = System.getenv("GITHUB_TAG")
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/satohu20xx/reactive-repository")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR")
+                password = System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
+}

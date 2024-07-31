@@ -7,3 +7,24 @@ java {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
 }
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            groupId = "com.github.satohu20xx.reactive-repository"
+            artifactId = "annotation"
+            version = System.getenv("GITHUB_TAG")
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/satohu20xx/reactive-repository")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR")
+                password = System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
+}
