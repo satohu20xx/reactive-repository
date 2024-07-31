@@ -2,9 +2,19 @@ package com.kkagurazaka.reactive.repository.processor.tools
 
 import com.google.common.base.CaseFormat
 import com.kkagurazaka.reactive.repository.processor.definition.prefs.GetterDefinition
-import com.squareup.javapoet.ClassName
-import com.squareup.javapoet.TypeName
-import javax.lang.model.element.*
+import com.squareup.kotlinpoet.BOOLEAN
+import com.squareup.kotlinpoet.FLOAT
+import com.squareup.kotlinpoet.INT
+import com.squareup.kotlinpoet.KModifier
+import com.squareup.kotlinpoet.LONG
+import com.squareup.kotlinpoet.STRING
+import com.squareup.kotlinpoet.TypeName
+import com.squareup.kotlinpoet.asTypeName
+import javax.lang.model.element.Element
+import javax.lang.model.element.ElementKind
+import javax.lang.model.element.ExecutableElement
+import javax.lang.model.element.Modifier
+import javax.lang.model.element.TypeElement
 import javax.lang.model.type.TypeKind
 
 fun String.lowerCamelToUpperCamel(): String =
@@ -18,7 +28,7 @@ fun String.toLowerSnake(): String =
 
 val Element.isNullableAnnotated: Boolean
     get() = annotationMirrors.any {
-        val className = ClassName.get(it.annotationType)
+        val className = it.annotationType.asTypeName()
         className == Types.annotationNullableJetBrains ||
                 className == Types.annotationNullableAndroidX ||
                 className == Types.annotationNullableSupport
@@ -26,14 +36,14 @@ val Element.isNullableAnnotated: Boolean
 
 val Element.isNonNullAnnotated: Boolean
     get() = annotationMirrors.any {
-        val className = ClassName.get(it.annotationType)
+        val className = it.annotationType.asTypeName()
         className == Types.annotationNonNullJetBrains ||
                 className == Types.annotationNonNullAndroidX ||
                 className == Types.annotationNonNullSupport
     }
 val Element.isPrefsKeyAnnotated: Boolean
     get() = annotationMirrors.any {
-        val className = ClassName.get(it.annotationType)
+        val className = it.annotationType.asTypeName()
         className == Types.prefsKey
     }
 
@@ -97,9 +107,10 @@ fun <T : Any> TypeElement.mapIfMethod(block: (method: ExecutableElement) -> T): 
         .toList()
 
 val TypeName.isSupportedByPrefs: Boolean
-    get() = this == TypeName.BOOLEAN ||
+    get() = this == BOOLEAN ||
+            this == STRING ||
             this == Types.string ||
-            this == TypeName.INT ||
-            this == TypeName.FLOAT ||
-            this == TypeName.LONG ||
+            this == INT ||
+            this == FLOAT ||
+            this == LONG ||
             this == Types.stringSet

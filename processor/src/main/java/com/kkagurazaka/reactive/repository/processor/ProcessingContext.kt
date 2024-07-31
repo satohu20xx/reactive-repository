@@ -6,8 +6,8 @@ import com.kkagurazaka.reactive.repository.processor.definition.prefs.PrefsEntit
 import com.kkagurazaka.reactive.repository.processor.definition.prefs.PrefsRepositoryDefinition
 import com.kkagurazaka.reactive.repository.processor.definition.prefs.TypeAdapterDefinition
 import com.kkagurazaka.reactive.repository.processor.exception.ProcessingException
-import com.squareup.javapoet.ClassName
-import com.squareup.javapoet.TypeName
+import com.squareup.kotlinpoet.ClassName
+import com.squareup.kotlinpoet.TypeName
 import java.io.PrintWriter
 import java.io.StringWriter
 import javax.annotation.processing.ProcessingEnvironment
@@ -29,7 +29,8 @@ class ProcessingContext(private val processingEnv: ProcessingEnvironment) {
         get() = mutablePrefsRepositoryDefinitions
 
     private val mutableTypeAdapterDefinitions = mutableMapOf<TypeName, TypeAdapterDefinition>()
-    private val mutableInMemoryEntityDefinitions = mutableMapOf<ClassName, InMemoryEntityDefinition>()
+    private val mutableInMemoryEntityDefinitions =
+        mutableMapOf<ClassName, InMemoryEntityDefinition>()
     private val mutablePrefsEntityDefinitions = mutableMapOf<ClassName, PrefsEntityDefinition>()
     private val mutableInMemoryRepositoryDefinitions = mutableListOf<InMemoryRepositoryDefinition>()
     private val mutablePrefsRepositoryDefinitions = mutableListOf<PrefsRepositoryDefinition>()
@@ -58,11 +59,17 @@ class ProcessingContext(private val processingEnv: ProcessingEnvironment) {
     }
 
     fun note(message: String) {
-        processingEnv.messager.printMessage(Diagnostic.Kind.NOTE, "[${ReactiveRepositoryProcessor.TAG}] $message")
+        processingEnv.messager.printMessage(
+            Diagnostic.Kind.NOTE,
+            "[${ReactiveRepositoryProcessor.TAG}] $message"
+        )
     }
 
     fun warn(message: String) {
-        processingEnv.messager.printMessage(Diagnostic.Kind.WARNING, "[${ReactiveRepositoryProcessor.TAG}] $message")
+        processingEnv.messager.printMessage(
+            Diagnostic.Kind.WARNING,
+            "[${ReactiveRepositoryProcessor.TAG}] $message"
+        )
     }
 
     fun addError(message: String, element: Element?, cause: Throwable? = null) {

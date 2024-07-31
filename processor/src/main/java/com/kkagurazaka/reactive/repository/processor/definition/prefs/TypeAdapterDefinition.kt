@@ -2,10 +2,13 @@ package com.kkagurazaka.reactive.repository.processor.definition.prefs
 
 import com.kkagurazaka.reactive.repository.processor.ProcessingContext
 import com.kkagurazaka.reactive.repository.processor.exception.ProcessingException
+import com.kkagurazaka.reactive.repository.processor.tools.isNullableAnnotated
 import com.kkagurazaka.reactive.repository.processor.tools.isPublicMethod
 import com.kkagurazaka.reactive.repository.processor.tools.isSupportedByPrefs
-import com.squareup.javapoet.ClassName
-import com.squareup.javapoet.TypeName
+import com.squareup.kotlinpoet.ClassName
+import com.squareup.kotlinpoet.TypeName
+import com.squareup.kotlinpoet.asClassName
+import com.squareup.kotlinpoet.asTypeName
 import javax.lang.model.element.ExecutableElement
 import javax.lang.model.element.Modifier
 import javax.lang.model.element.TypeElement
@@ -13,7 +16,8 @@ import javax.lang.model.type.TypeKind
 
 class TypeAdapterDefinition(context: ProcessingContext, val element: TypeElement) {
 
-    val className: ClassName = ClassName.get(element)
+    val className: ClassName =
+        element.asClassName().copy(nullable = element.isNullableAnnotated) as ClassName
     val adapterMethods: List<AdapterMethodPair>
     val isInstanceRequired: Boolean
 
@@ -31,8 +35,8 @@ class TypeAdapterDefinition(context: ProcessingContext, val element: TypeElement
                 }
 
                 val isInstanceRequired = !method.modifiers.contains(Modifier.STATIC)
-                val parameterType = TypeName.get(method.parameters.single().asType())
-                val returnType = TypeName.get(method.returnType)
+                val parameterType = method.parameters.single().asType().asTypeName()
+                val returnType = method.returnType.asTypeName()
 
                 when {
                     parameterType.isSupportedByPrefs && returnType.isSupportedByPrefs -> {
@@ -41,6 +45,7 @@ class TypeAdapterDefinition(context: ProcessingContext, val element: TypeElement
                             method
                         )
                     }
+
                     parameterType.isSupportedByPrefs && !returnType.isSupportedByPrefs -> {
                         val adapterTypes = AdapterMethodKey(returnType, parameterType)
                         if (toTypeElements.containsKey(adapterTypes)) {
@@ -49,8 +54,10 @@ class TypeAdapterDefinition(context: ProcessingContext, val element: TypeElement
                                 method
                             )
                         }
-                        toTypeElements[adapterTypes] = AdapterMethodValue(method, isInstanceRequired)
+                        toTypeElements[adapterTypes] =
+                            AdapterMethodValue(method, isInstanceRequired)
                     }
+
                     !parameterType.isSupportedByPrefs && returnType.isSupportedByPrefs -> {
                         val adapterTypes = AdapterMethodKey(parameterType, returnType)
                         if (toPrefsElements.containsKey(adapterTypes)) {
@@ -59,7 +66,8 @@ class TypeAdapterDefinition(context: ProcessingContext, val element: TypeElement
                                 method
                             )
                         }
-                        toPrefsElements[adapterTypes] = AdapterMethodValue(method, isInstanceRequired)
+                        toPrefsElements[adapterTypes] =
+                            AdapterMethodValue(method, isInstanceRequired)
                     }
                 }
             }

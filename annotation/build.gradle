@@ -1,7 +1,9 @@
+apply plugin: 'maven-publish'
 apply plugin: 'java-library'
-apply plugin: 'com.github.dcendents.android-maven'
 
 dependencies {}
 
-targetCompatibility = JavaVersion.VERSION_1_8
-sourceCompatibility = JavaVersion.VERSION_1_8
+java {
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_11
+}

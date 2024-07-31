@@ -2,93 +2,98 @@ package com.kkagurazaka.reactive.repository.processor.writer.prefs
 
 import com.kkagurazaka.reactive.repository.processor.definition.MethodDefinition
 import com.kkagurazaka.reactive.repository.processor.definition.prefs.PrefsEntityDefinition
-import com.squareup.javapoet.MethodSpec
-import javax.lang.model.element.Modifier
+import com.squareup.kotlinpoet.FunSpec
+import com.squareup.kotlinpoet.KModifier
 
 object PrefsNonReactiveMethodSpecBuilder {
 
-    fun build(definition: MethodDefinition<PrefsEntityDefinition>, hasRx2Processor: Boolean): MethodSpec? {
+    fun build(
+        definition: MethodDefinition<PrefsEntityDefinition>,
+        hasCoroutineFlow: Boolean
+    ): FunSpec? {
         val entityDefinition = definition.entityDefinition
 
-        val builder = MethodSpec.methodBuilder(definition.methodName)
-            .addModifiers(Modifier.PUBLIC)
-            .addAnnotation(Override::class.java)
+        val builder = FunSpec.builder(definition.methodName)
+            .addModifiers(KModifier.PUBLIC)
+            .addModifiers(KModifier.OVERRIDE)
 
         return when (val type = definition.type) {
-            is MethodDefinition.Type.Rx2Observable, is MethodDefinition.Type.Rx2Flowable -> {
+            is MethodDefinition.Type.CoroutineFlow -> {
                 return null
             }
+
             is MethodDefinition.Type.NullableGetter,
             is MethodDefinition.Type.NonNullGetter,
             is MethodDefinition.Type.PlatFormTypeGetter -> {
                 builder.returns(entityDefinition.className)
-                    .addGetPreferenceCode(entityDefinition)
+                    .addCode("return getImpl()")
             }
+
             is MethodDefinition.Type.NullableSetter -> {
-                builder.setupAsNullableSetter(entityDefinition, type.parameterName, hasRx2Processor)
+                builder.setupAsNullableSetter(
+                    entityDefinition,
+                    type.parameterName,
+                    hasCoroutineFlow
+                )
             }
+
             is MethodDefinition.Type.NonNullSetter -> {
-                builder.setupAsNonNullSetter(entityDefinition, type.parameterName, hasRx2Processor)
+                builder.setupAsNonNullSetter(entityDefinition, type.parameterName, hasCoroutineFlow)
             }
+
             is MethodDefinition.Type.PlatFormTypeSetter -> {
-                builder.setupAsNullableSetter(entityDefinition, type.parameterName, hasRx2Processor)
+                builder.setupAsNullableSetter(
+                    entityDefinition,
+                    type.parameterName,
+                    hasCoroutineFlow
+                )
             }
         }.build()
     }
 
-    fun buildPrivateGetter(name: String, entityDefinition: PrefsEntityDefinition): MethodSpec? =
-        MethodSpec.methodBuilder(name)
-            .addModifiers(Modifier.PRIVATE)
+    fun buildPrivateGetter(name: String, entityDefinition: PrefsEntityDefinition): FunSpec =
+        FunSpec.builder(name)
+            .addModifiers(KModifier.PRIVATE)
             .returns(entityDefinition.className)
             .addGetPreferenceCode(entityDefinition)
             .build()
 
-    private fun MethodSpec.Builder.setupAsNullableSetter(
+    private fun FunSpec.Builder.setupAsNullableSetter(
         entityDefinition: PrefsEntityDefinition,
         parameterName: String,
-        hasRx2Processor: Boolean
-    ): MethodSpec.Builder =
-        addParameter(entityDefinition.className, parameterName)
-            .apply {
-                if (hasRx2Processor) {
-                    addProcessorInitializeCode()
-                }
-            }
-            .addClearPreferenceCode(entityDefinition, parameterName, hasRx2Processor)
+        hasCoroutineFlow: Boolean
+    ): FunSpec.Builder =
+        addParameter(parameterName, entityDefinition.className.copy(nullable = true))
+            .addClearPreferenceCode(entityDefinition, parameterName, hasCoroutineFlow)
             .addStoreToPreferenceCode(entityDefinition, parameterName)
             .apply {
-                if (hasRx2Processor) {
+                if (hasCoroutineFlow) {
                     addProcessorOnNextCode(parameterName)
                 }
             }
 
-    private fun MethodSpec.Builder.setupAsNonNullSetter(
+    private fun FunSpec.Builder.setupAsNonNullSetter(
         entityDefinition: PrefsEntityDefinition,
         parameterName: String,
-        hasRx2Processor: Boolean
-    ): MethodSpec.Builder =
-        addParameter(entityDefinition.className, parameterName)
-            .apply {
-                if (hasRx2Processor) {
-                    addProcessorInitializeCode()
-                }
-            }
+        hasCoroutineFlow: Boolean
+    ): FunSpec.Builder =
+        addParameter(parameterName, entityDefinition.className)
             .addStoreToPreferenceCode(entityDefinition, parameterName)
             .apply {
-                if (hasRx2Processor) {
+                if (hasCoroutineFlow) {
                     addProcessorOnNextCode(parameterName)
                 }
             }
 
-    private fun MethodSpec.Builder.addGetPreferenceCode(entityDefinition: PrefsEntityDefinition): MethodSpec.Builder =
+    private fun FunSpec.Builder.addGetPreferenceCode(entityDefinition: PrefsEntityDefinition): FunSpec.Builder =
         addCode(PrefsEntityStatementBuilder.buildGetStatement(entityDefinition))
 
-    private fun MethodSpec.Builder.addClearPreferenceCode(
+    private fun FunSpec.Builder.addClearPreferenceCode(
         entityDefinition: PrefsEntityDefinition,
         parameterName: String,
-        hasRx2Processor: Boolean
-    ): MethodSpec.Builder =
-        beginControlFlow("if (\$L == null)", parameterName)
+        hasCoroutineProcessor: Boolean
+    ): FunSpec.Builder =
+        beginControlFlow("if (%L == null)", parameterName)
             .addCode(
                 PrefsEntityStatementBuilder.buildClearStatement(
                     entityDefinition.accessorType,
@@ -96,17 +101,17 @@ object PrefsNonReactiveMethodSpecBuilder {
                 )
             )
             .apply {
-                if (hasRx2Processor) {
-                    addStatement("serialized.onNext(new \$T())", entityDefinition.className)
+                if (hasCoroutineProcessor) {
+                    addStatement("stateFlow.value = %T()", entityDefinition.className)
                 }
             }
             .addStatement("return")
             .endControlFlow()
 
-    private fun MethodSpec.Builder.addStoreToPreferenceCode(
+    private fun FunSpec.Builder.addStoreToPreferenceCode(
         entityDefinition: PrefsEntityDefinition,
         parameterName: String
-    ): MethodSpec.Builder =
+    ): FunSpec.Builder =
         addCode(
             PrefsEntityStatementBuilder.buildStoreStatement(
                 parameterName,
@@ -116,9 +121,6 @@ object PrefsNonReactiveMethodSpecBuilder {
             )
         )
 
-    private fun MethodSpec.Builder.addProcessorInitializeCode(): MethodSpec.Builder =
-        addStatement("initProcessor()")
-
-    private fun MethodSpec.Builder.addProcessorOnNextCode(parameterName: String): MethodSpec.Builder =
-        addStatement("serialized.onNext(\$L)", parameterName)
+    private fun FunSpec.Builder.addProcessorOnNextCode(parameterName: String): FunSpec.Builder =
+        addStatement("stateFlow.value = %L", parameterName)
 }

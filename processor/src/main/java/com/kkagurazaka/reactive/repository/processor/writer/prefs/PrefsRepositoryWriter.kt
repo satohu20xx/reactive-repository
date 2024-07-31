@@ -6,85 +6,92 @@ import com.kkagurazaka.reactive.repository.processor.definition.prefs.PrefsEntit
 import com.kkagurazaka.reactive.repository.processor.definition.prefs.PrefsRepositoryDefinition
 import com.kkagurazaka.reactive.repository.processor.exception.ProcessingException
 import com.kkagurazaka.reactive.repository.processor.tools.Types
+import com.kkagurazaka.reactive.repository.processor.writer.CoroutineMethodSpecBuilder
 import com.kkagurazaka.reactive.repository.processor.writer.RepositoryWriter
-import com.kkagurazaka.reactive.repository.processor.writer.Rx2FieldSpecsBuilder
-import com.kkagurazaka.reactive.repository.processor.writer.Rx2MethodSpecBuilder
-import com.squareup.javapoet.CodeBlock
-import com.squareup.javapoet.FieldSpec
-import com.squareup.javapoet.MethodSpec
-import com.squareup.javapoet.TypeSpec
-import javax.lang.model.element.Modifier
+import com.squareup.kotlinpoet.CodeBlock
+import com.squareup.kotlinpoet.FunSpec
+import com.squareup.kotlinpoet.KModifier
+import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
+import com.squareup.kotlinpoet.PropertySpec
+import com.squareup.kotlinpoet.TypeSpec
 
 class PrefsRepositoryWriter(context: ProcessingContext, definition: PrefsRepositoryDefinition) :
     RepositoryWriter<PrefsRepositoryDefinition>(context, definition) {
 
-    private companion object {
-        val PRIVATE_FINAL = arrayOf(Modifier.PRIVATE, Modifier.FINAL)
-    }
-
     override fun TypeSpec.Builder.setup(): TypeSpec.Builder {
         val entityDefinition = definition.entityDefinition
         val entityClassName = entityDefinition.className
-        val hasRx2Methods = definition.hasRx2Methods
+        val hasCoroutineMethods = definition.hasCoroutineMethods
 
         // private final Context context;
-        val applicationContext = FieldSpec
-            .builder(Types.androidContext, "context", *PRIVATE_FINAL)
+        val applicationContext = PropertySpec
+            .builder("context", Types.androidContext)
             .build()
-        addField(applicationContext)
+        addProperty(applicationContext)
 
         // private final AtomicReference<SharedPreferences> preferences = new AtomicReference<>();
         val atomicPreferencesClassName = Types.atomicReference(Types.sharedPreferences)
-        val preferences = FieldSpec
-            .builder(atomicPreferencesClassName, "preferences", *PRIVATE_FINAL)
-            .initializer("new \$T()", atomicPreferencesClassName)
+        val preferences = PropertySpec
+            .builder("preferences", atomicPreferencesClassName, KModifier.PRIVATE)
+            .initializer("%T()", atomicPreferencesClassName)
             .build()
-        addField(preferences)
+        addProperty(preferences)
 
         // private final EntityClass defaultValue = new EntityClass();
-        val defaultValue = FieldSpec
-            .builder(entityClassName, "defaultValue", *PRIVATE_FINAL)
-            .initializer("new \$T()", entityClassName)
+        val defaultValue = PropertySpec
+            .builder("defaultValue", entityClassName, KModifier.PRIVATE)
+            .initializer("%T()", entityClassName)
             .build()
-        addField(defaultValue)
+        addProperty(defaultValue)
 
         // private final TypeAdapter typeAdapter;
         entityDefinition.typeAdapter?.takeIf { it.isInstanceRequired }?.let { def ->
-            val typeAdapter = FieldSpec
-                .builder(def.className, "typeAdapter", *PRIVATE_FINAL)
+            val typeAdapter = PropertySpec
+                .builder("typeAdapter", def.className, KModifier.PRIVATE)
                 .build()
-            addField(typeAdapter)
+            addProperty(typeAdapter)
         }
 
-        addMethod(buildConstructorMethodSpec(entityDefinition))
+        addFunction(buildConstructorMethodSpec(entityDefinition))
 
-        addMethods(definition.methodDefinitions.mapNotNull {
-            PrefsNonReactiveMethodSpecBuilder.build(it, hasRx2Methods)
-        })
-
-        val getterDefinition = definition.methodDefinitions.firstOrNull {
-            it.type is MethodDefinition.Type.NonNullGetter || it.type is MethodDefinition.Type.PlatFormTypeGetter
+        definition.methodDefinitions.mapNotNull {
+            PrefsNonReactiveMethodSpecBuilder.build(it, hasCoroutineMethods)
+        }.forEach {
+            addFunction(it)
         }
 
-        if (hasRx2Methods) {
-            val processorPrepareStatement = CodeBlock.builder()
-                .addStatement("initProcessor()")
-                .build()
-            addFields(Rx2FieldSpecsBuilder.build(entityDefinition))
-            addMethods(definition.methodDefinitions.mapNotNull {
-                Rx2MethodSpecBuilder.build(it, processorPrepareStatement)
-            })
-            addMethod(buildRx2ProcessorInitializeMethodSpec(getterDefinition))
-        }
-        if (getterDefinition == null) {
-            val method = PrefsNonReactiveMethodSpecBuilder.buildPrivateGetter(
-                "get",
-                entityDefinition
+        if (hasCoroutineMethods) {
+            addProperty(
+                PropertySpec
+                    .builder(
+                        "stateFlow",
+                        Types.coroutineMutableStateFlow
+                            .parameterizedBy(entityDefinition.className),
+                        KModifier.PRIVATE
+                    )
+                    .delegate(
+                        CodeBlock.builder()
+                            .beginControlFlow("lazy", LazyThreadSafetyMode::class.java)
+                            .add("MutableStateFlow(getImpl())")
+                            .endControlFlow()
+                            .build()
+                    )
+                    .build()
             )
-            addMethod(method)
+            definition.methodDefinitions.mapNotNull {
+                CoroutineMethodSpecBuilder.build(it, false)
+            }.forEach {
+                addFunction(it)
+            }
         }
 
-        addMethod(buildGetPreferencesMethodSpec(entityDefinition))
+        val method = PrefsNonReactiveMethodSpecBuilder.buildPrivateGetter(
+            "getImpl",
+            entityDefinition
+        )
+        addFunction(method)
+
+        addFunction(buildGetPreferencesMethodSpec(entityDefinition))
 
         return this
     }
@@ -98,13 +105,13 @@ class PrefsRepositoryWriter(context: ProcessingContext, definition: PrefsReposit
         }
     }
 
-    private fun buildConstructorMethodSpec(entityDefinition: PrefsEntityDefinition): MethodSpec =
-        MethodSpec.constructorBuilder()
-            .addModifiers(Modifier.PUBLIC)
-            .addParameter(Types.androidContext, "context")
+    private fun buildConstructorMethodSpec(entityDefinition: PrefsEntityDefinition): FunSpec =
+        FunSpec.constructorBuilder()
+            .addModifiers(KModifier.PUBLIC)
+            .addParameter("context", Types.androidContext)
             .apply {
                 entityDefinition.typeAdapter?.takeIf { it.isInstanceRequired }?.let {
-                    addParameter(it.className, "typeAdapter")
+                    addParameter("typeAdapter", it.className)
                 }
             }
             .addCode(
@@ -119,25 +126,26 @@ class PrefsRepositoryWriter(context: ProcessingContext, definition: PrefsReposit
             )
             .build()
 
-    private fun buildGetPreferencesMethodSpec(entityDefinition: PrefsEntityDefinition): MethodSpec =
-        MethodSpec.methodBuilder("getPreferences")
-            .addModifiers(Modifier.PRIVATE)
+    private fun buildGetPreferencesMethodSpec(entityDefinition: PrefsEntityDefinition): FunSpec =
+        FunSpec.builder("getPreferences")
+            .addModifiers(KModifier.PRIVATE)
             .returns(Types.sharedPreferences)
             .addCode(
                 CodeBlock.builder()
-                    .addStatement("\$T result = preferences.get()", Types.sharedPreferences)
+                    .addStatement("var result = preferences.get()", Types.sharedPreferences)
                     .beginControlFlow("if (result == null)")
                     .apply {
                         when (val preferencesType = entityDefinition.preferencesType) {
                             is PrefsEntityDefinition.PreferencesType.Default -> {
                                 addStatement(
-                                    "result = \$T.getDefaultSharedPreferences(context)",
+                                    "result = %T.getDefaultSharedPreferences(context)",
                                     Types.preferenceManager
                                 )
                             }
+
                             is PrefsEntityDefinition.PreferencesType.Named -> {
                                 addStatement(
-                                    "result = context.getSharedPreferences(\$S, \$T.MODE_PRIVATE)",
+                                    "result = context.getSharedPreferences(%S, %T.MODE_PRIVATE)",
                                     preferencesType.name,
                                     Types.androidContext
                                 )
@@ -149,27 +157,6 @@ class PrefsRepositoryWriter(context: ProcessingContext, definition: PrefsReposit
                     }
                     .endControlFlow()
                     .addStatement("return result")
-                    .build()
-            )
-            .build()
-
-    private fun buildRx2ProcessorInitializeMethodSpec(getterDefinition: MethodDefinition<*>?): MethodSpec =
-        MethodSpec.methodBuilder("initProcessor")
-            .addModifiers(Modifier.PRIVATE, Modifier.SYNCHRONIZED)
-            .addCode(
-                CodeBlock.builder()
-                    .beginControlFlow("if (processor != null)")
-                    .addStatement("return")
-                    .endControlFlow()
-                    .apply {
-                        val createDefaultCode = if (getterDefinition != null) {
-                            CodeBlock.builder().add("\$L()", getterDefinition.methodName).build()
-                        } else {
-                            CodeBlock.builder().add("get()").build()
-                        }
-                        Rx2FieldSpecsBuilder.buildInitializeStatement(createDefaultCode)
-                            .forEach { add(it) }
-                    }
                     .build()
             )
             .build()

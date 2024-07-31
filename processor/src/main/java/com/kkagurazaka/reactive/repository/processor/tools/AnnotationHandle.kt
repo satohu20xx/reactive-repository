@@ -1,6 +1,7 @@
 package com.kkagurazaka.reactive.repository.processor.tools
 
-import com.squareup.javapoet.TypeName
+import com.squareup.kotlinpoet.TypeName
+import com.squareup.kotlinpoet.asTypeName
 import javax.lang.model.element.AnnotationMirror
 import javax.lang.model.element.Element
 import javax.lang.model.element.TypeElement
@@ -22,7 +23,7 @@ class AnnotationHandle<T : Annotation>(
     inline fun <reified T> getOrDefault(name: String): T =
         get<T>(name) ?: T::class.java.cast(annotation.java.getMethod(name).defaultValue)
 
-    fun getAsTypeName(name: String): TypeName = TypeName.get(get<TypeMirror>(name))
+    fun getAsTypeName(name: String): TypeName? = get<TypeMirror>(name)?.asTypeName()
 
     companion object {
 
